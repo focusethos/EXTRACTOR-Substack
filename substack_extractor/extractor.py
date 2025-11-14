@@ -164,10 +164,10 @@ class NoteExtractor:
 
     # Public API -----------------------------------------------------------
 
-    def extract(self, url: str) -> NoteData:
+    def extract(self, url: str, *, cookie: Optional[str] = None) -> NoteData:
         """Fetch *url* and return :class:`NoteData`."""
 
-        html, final_url = self._download(url)
+        html, final_url = self._download(url, cookie=cookie)
         data = self._find_jsonld(html)
         body_text, media_flags = self._extract_body(html, data)
         counts = self._extract_counts(html, data)
@@ -186,8 +186,11 @@ class NoteExtractor:
 
     # Download -------------------------------------------------------------
 
-    def _download(self, url: str) -> Tuple[str, str]:
-        request = Request(url, headers={"User-Agent": self.user_agent})
+    def _download(self, url: str, *, cookie: Optional[str] = None) -> Tuple[str, str]:
+        headers = {"User-Agent": self.user_agent}
+        if cookie:
+            headers["Cookie"] = cookie
+        request = Request(url, headers=headers)
         try:
             with urlopen(request, timeout=self.timeout) as response:
                 charset = response.headers.get_content_charset() or "utf-8"

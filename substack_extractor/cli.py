@@ -9,13 +9,8 @@ import sys
 from pathlib import Path
 from typing import Iterable, List, Sequence
 
-from .extractor import (
-    ExtractionError,
-    NoteData,
-    NoteExtractor,
-    notes_to_csv,
-    notes_to_tsv,
-)
+from .batch import BatchExtractor
+from .extractor import NoteData, NoteExtractor, notes_to_csv, notes_to_tsv
 
 
 def _read_urls_from_file(path: Path) -> List[str]:
@@ -135,6 +130,34 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Custom HTTP user agent string",
     )
     parser.add_argument(
+        "--delay",
+        type=float,
+        default=0.0,
+        help="Seconds to wait between requests (default: 0)",
+    )
+    parser.add_argument(
+        "--max-retries",
+        type=int,
+        default=3,
+        help="Maximum attempts per URL before giving up (default: 3)",
+    )
+    parser.add_argument(
+        "--retry-backoff",
+        type=float,
+        default=2.0,
+        help="Multiplier applied to the delay for each retry (default: 2.0)",
+    )
+    parser.add_argument(
+        "--cookie",
+        action="append",
+        help="Cookie header value to rotate between requests (can be used multiple times)",
+    )
+    parser.add_argument(
+        "--cookie-file",
+        type=Path,
+        help="Path to a text file containing one Cookie header per line",
+    )
+    parser.add_argument(
         "--export",
         action="append",
         metavar="FORMAT:PATH",
@@ -170,13 +193,15 @@ def run(argv: Sequence[str] | None = None) -> int:
     urls = gather_urls(args)
     extractor = NoteExtractor(timeout=args.timeout, user_agent=args.user_agent)
 
-    notes: List[NoteData] = []
-    failures: List[str] = []
-    for url in urls:
-        try:
-            notes.append(extractor.extract(url))
-        except ExtractionError as exc:
-            failures.append(f"{url}: {exc}")
+    cookies = _gather_cookies(args)
+    batch = BatchExtractor(
+        extractor,
+        delay=args.delay,
+        max_retries=args.max_retries,
+        retry_backoff=args.retry_backoff,
+        cookies=cookies,
+    )
+    notes, failures = batch.extract_all(urls)
 
     if notes and not args.no_table:
         print(_render_markdown_table(notes))
@@ -190,6 +215,20 @@ def run(argv: Sequence[str] | None = None) -> int:
         sys.stderr.write("\n".join(failures) + "\n")
         return 1
     return 0
+
+
+def _gather_cookies(args: argparse.Namespace) -> List[str]:
+    cookies: List[str] = []
+    if args.cookie:
+        cookies.extend([value for value in args.cookie if value])
+    if args.cookie_file:
+        cookies.extend(_read_cookies_from_file(args.cookie_file))
+    return [value.strip() for value in cookies if value and value.strip()]
+
+
+def _read_cookies_from_file(path: Path) -> List[str]:
+    with path.open("r", encoding="utf-8") as handle:
+        return [line.strip() for line in handle if line.strip()]
 
 
 def _parse_export_arg(value: str) -> tuple[str, str]:

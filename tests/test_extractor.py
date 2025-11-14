@@ -10,7 +10,7 @@ class _FakeExtractor(NoteExtractor):
         super().__init__(timeout=1)
         self._html = html
 
-    def _download(self, url: str):  # type: ignore[override]
+    def _download(self, url: str, *, cookie: str | None = None):  # type: ignore[override]
         return self._html, url
 
 

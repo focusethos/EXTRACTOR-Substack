@@ -1,5 +1,11 @@
 """Substack note extraction toolkit."""
 
-from .extractor import NoteExtractor, NoteData, ExtractionError
+from .batch import BatchExtractor
+from .extractor import ExtractionError, NoteData, NoteExtractor
 
-__all__ = ["NoteExtractor", "NoteData", "ExtractionError"]
+__all__ = [
+    "BatchExtractor",
+    "ExtractionError",
+    "NoteData",
+    "NoteExtractor",
+]
